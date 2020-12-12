@@ -38,7 +38,6 @@ html {
 }
 
 body {
-  animation: fadeIn 0.5s 1s forwards;
   background: var(--dark-gray);
   color: var(--dark-gray);
   font-family: 'IBM Plex Mono', sans-serif;
@@ -46,7 +45,6 @@ body {
   font-weight: 300;
   line-height: 1;
   margin: 16px;
-  opacity: 0;
   user-select: none;
 }
 
@@ -257,9 +255,4 @@ footer {
 
 footer a {
   color: #fff;
-}
-
-@keyframes {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
