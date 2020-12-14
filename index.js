@@ -1,4 +1,5 @@
 // Make arrangement random on clicking random
+// Finish Range input
 
 import { h, render, Component } from './lib/preact.js'
 import { useState, useEffect, useMemo, useRef } from './lib/hooks.js'
@@ -93,9 +94,13 @@ const App = () => {
   }
 
   const randomSettings = () => {
-    setNotes(sample(1, 24))
+    const notes = sample(1, 24)
+    const key = Object.keys(keySigs)[sample(0, 13)])
+
+    setNotes(notes)
+    setKey(key)
+    setArrangement(generateNotes({ notes, key }))
     setTempo(sample(40, 360))
-    setKey(Object.keys(keySigs)[sample(0, 13)])
     setWave(waveTypes[sample(0, 3)])
     setGain(sample(25, 100) / 100)
     setSmoothing(sample(0, 100) / 100)
