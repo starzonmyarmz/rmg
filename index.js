@@ -1,5 +1,5 @@
-// Make arrangement random on clicking random
 // Finish Range input
+// prevent jump to top when clicking stuff
 
 import { h, render, Component } from './lib/preact.js'
 import { useState, useEffect, useMemo, useRef } from './lib/hooks.js'
@@ -30,13 +30,13 @@ const durations = [4, 2, 1, 0.5, 0.25, 0.75]
 const waveTypes = ['square', 'sine', 'sawtooth', 'triangle']
 const params = new URLSearchParams(window.location.search)
 
-const generateNotes = ({ notes, key }) => {
+const generateNotes = ({ notes, key, rangeMin, rangeMax }) => {
   let collection = []
 
   for (let x = 0; x < notes; x++) {
     const note = sample(0, keySigs[key].length - 1)
     const duration = sample(0, durations.length - 1)
-    collection.push(`${keySigs[key][note]}${sample(1, 8)} ${durations[duration]}`)
+    collection.push(`${keySigs[key][note]}${sample(rangeMin * 1, rangeMax * 1)} ${durations[duration]}`)
   }
   return collection
 }
@@ -56,6 +56,7 @@ const App = () => {
   const [rangeMin, setRangeMin] = useState(params.get('rangemin') || 2)
   const [rangeMax, setRangeMax] = useState(params.get('rangemax') || 7)
   const [draggingMin, setDraggingMin] = useState(false)
+  const [draggingMax, setDraggingMax] = useState(false)
   const [key, setKey] = useState(params.get('key') || 'none')
   const [arrangement, setArrangement] = useState(parseArrangement() || generateNotes({ notes, key }))
   const [tempo, setTempo] = useState(params.get('tempo') || 120)
@@ -82,8 +83,10 @@ const App = () => {
 
   const resetSettings = () => {
     setNotes(8)
-    setTempo(120)
     setKey('none')
+    setRangeMin(2)
+    setRangeMax(7)
+    setTempo(120)
     setWave('square')
     setGain(0.5)
     setSmoothing(0)
@@ -95,11 +98,15 @@ const App = () => {
 
   const randomSettings = () => {
     const notes = sample(1, 24)
-    const key = Object.keys(keySigs)[sample(0, 13)])
+    const key = Object.keys(keySigs)[sample(0, 13)]
+    const rangeMin = sample(1, 8)
+    const rangeMax = sample(rangeMin, 8)
 
     setNotes(notes)
     setKey(key)
-    setArrangement(generateNotes({ notes, key }))
+    setRangeMin(rangeMin)
+    setRangeMax(rangeMax)
+    setArrangement(generateNotes({ notes, key, rangeMin, rangeMax }))
     setTempo(sample(40, 360))
     setWave(waveTypes[sample(0, 3)])
     setGain(sample(25, 100) / 100)
@@ -113,13 +120,13 @@ const App = () => {
   const changeNotes = (e) => {
     const notes = e.target.value
     setNotes(notes)
-    setArrangement(generateNotes({ notes, key }))
+    setArrangement(generateNotes({ notes, key, rangeMin, rangeMax }))
   }
 
   const changeKey = (e) => {
     const key = Object.keys(keySigs)[e.target.value]
     setKey(key)
-    setArrangement(generateNotes({ notes, key }))
+    setArrangement(generateNotes({ notes, key, rangeMin, rangeMax }))
   }
 
   useEffect(() => {
@@ -133,10 +140,72 @@ const App = () => {
   }, [playing])
 
   useEffect(() => {
+    const onMouseUp = () => {
+      setDraggingMin(false)
+      setDraggingMax(false)
+    }
+
+    document.body.addEventListener('mouseup', onMouseUp)
+
+    return () => {
+      document.body.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!track_ref.current) return
+      if (!draggingMin) return
+
+      const range = Math.min(Math.max(0, e.clientX - track_ref.current.offsetLeft), track_ref.current.clientWidth)
+      const minRange = Math.min(rangeMax, 1 + Math.round(7 * (range / track_ref.current.clientWidth)))
+      setRangeMin(minRange)
+    }
+
+    document.body.addEventListener('mousemove', onMouseMove)
+
+    return () => {
+      document.body.removeEventListener('mousemove', onMouseMove)
+    }
+  }, [draggingMin])
+
+  useEffect(() => {
+    const onMouseMove = (e) => {
+      if (!track_ref.current) return
+      if (!draggingMax) return
+
+      const range = Math.min(Math.max(0, e.clientX - track_ref.current.offsetLeft), track_ref.current.clientWidth)
+      const maxRange = Math.max(rangeMin, 1 + Math.round(7 * (range / track_ref.current.clientWidth)))
+      setRangeMax(maxRange)
+    }
+
+    document.body.addEventListener('mousemove', onMouseMove)
+
+    return () => {
+      document.body.removeEventListener('mousemove', onMouseMove)
+    }
+  }, [draggingMax])
+
+  useEffect(() => {
+    if (!track_ref.current) return
+    if (!track_min_ref.current) return
+    if (!track_max_ref.current) return
+
+    let min_width = track_min_ref.current.clientWidth
+    let max_width = track_max_ref.current.clientWidth
+    let width = track_ref.current.clientWidth - min_width
+
+    track_min_ref.current.style.transform = `translateX(${Math.round(width / 7 * (rangeMin - 1))}px)`
+    track_max_ref.current.style.transform = `translateX(${Math.round(width / 7 * (rangeMax - 1))}px)`
+  }, [rangeMin, rangeMax])
+
+  useEffect(() => {
     params.set('notes', notes)
-    params.set('tempo', tempo)
     params.set('key', key)
+    params.set('rangemin', rangeMin)
+    params.set('rangemax', rangeMax)
     params.set('arrangement', arrangement)
+    params.set('tempo', tempo)
     params.set('wave', wave)
     params.set('smoothing', smoothing)
     params.set('staccato', staccato)
@@ -146,7 +215,7 @@ const App = () => {
     params.set('loop', loop)
 
     window.history.replaceState({}, '', `${location.pathname}?${params}`);
-  }, [notes, tempo, key, arrangement, wave, smoothing, staccato, bass, mid, treble, loop])
+  }, [notes, tempo, key, rangeMin, rangeMax, arrangement, wave, smoothing, staccato, bass, mid, treble, loop])
 
   if (sequence.current) {
     sequence.current.notes = []
@@ -162,24 +231,11 @@ const App = () => {
     sequence.current.loop = loop
   }
 
-  useEffect(() => {
-    if (!track_ref.current) return
-    if (!track_min_ref.current) return
-    if (!track_max_ref.current) return
-
-    let min_width = track_min_ref.current.clientWidth
-    let max_width = track_max_ref.current.clientWidth
-    let width = track_ref.current.clientWidth - min_width
-
-    track_min_ref.current.style.transform = `translateX(${Math.round(width / 7 * (rangeMin - 1))}px)`
-    track_max_ref.current.style.transform = `translateX(${Math.round(width / 7 * (rangeMax - 1))}px)`
-  }, [rangeMin, rangeMax])
-
   const range = (min, max) => {
     return(html`
       <div class="track" ref=${track_ref}>
-        <button type="button" class="track-btn" value=${min} ref=${track_min_ref}></button>
-        <button type="button" class="track-btn" value=${max} ref=${track_max_ref}></button>
+        <button type="button" class="track-btn" data-min=${rangeMin} ref=${track_min_ref} onMouseDown=${ () => { setDraggingMin(true) }}></button>
+        <button type="button" class="track-btn" data-max=${rangeMax} ref=${track_max_ref} onMouseDown=${ () => { setDraggingMax(true) }}></button>
       </div>
     `)
   }

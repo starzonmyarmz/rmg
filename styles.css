@@ -179,6 +179,10 @@ output {
   height: 8px;
 }
 
+.track {
+  cursor: default;
+}
+
 .range::-webkit-slider-thumb,
 .track-btn {
   appearance: none;
@@ -255,4 +259,9 @@ footer {
 
 footer a {
   color: #fff;
+}
+
+[data-min="8"],
+[data-max="1"] {
+  z-index: 5 !important;
 }
