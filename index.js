@@ -1,6 +1,3 @@
-// Finish Range input
-// prevent jump to top when clicking stuff
-
 import { h, render, Component } from './lib/preact.js'
 import { useState, useEffect, useMemo, useRef } from './lib/hooks.js'
 import htm from './lib/htm.js'
@@ -50,6 +47,11 @@ window.sample = (min, max) => {
   return Math.floor(Math.random() * (1 + max - min) + min)
 }
 
+// Cheating to check and see if the page has been parsed
+// to determine if the arrangement useMemo needs to parse
+// a arrangement via params or not...
+let parsed = false
+
 const App = () => {
   const [playing, setPlaying] = useState(false)
   const [notes, setNotes] = useState(params.get('notes') || 8)
@@ -58,7 +60,6 @@ const App = () => {
   const [draggingMin, setDraggingMin] = useState(false)
   const [draggingMax, setDraggingMax] = useState(false)
   const [key, setKey] = useState(params.get('key') || 'none')
-  const [arrangement, setArrangement] = useState(parseArrangement() || generateNotes({ notes, key }))
   const [tempo, setTempo] = useState(params.get('tempo') || 120)
   const [wave, setWave] = useState(params.get('wave') || 'square')
   const [gain, setGain] = useState(params.get('gain') || 0.5)
@@ -72,6 +73,16 @@ const App = () => {
   const track_ref = useRef()
   const track_min_ref = useRef()
   const track_max_ref = useRef()
+
+  const arrangement = useMemo(() => {
+    if (!parsed) {
+      parsed = true
+      return parseArrangement() || generateNotes({ notes, key, rangeMin, rangeMax })
+    } else {
+      return generateNotes({ notes, key, rangeMin, rangeMax })
+    }
+
+  }, [notes, key, rangeMin, rangeMax])
 
   const togglePlay = () => {
     setPlaying(!playing)
@@ -106,7 +117,6 @@ const App = () => {
     setKey(key)
     setRangeMin(rangeMin)
     setRangeMax(rangeMax)
-    setArrangement(generateNotes({ notes, key, rangeMin, rangeMax }))
     setTempo(sample(40, 360))
     setWave(waveTypes[sample(0, 3)])
     setGain(sample(25, 100) / 100)
@@ -120,13 +130,11 @@ const App = () => {
   const changeNotes = (e) => {
     const notes = e.target.value
     setNotes(notes)
-    setArrangement(generateNotes({ notes, key, rangeMin, rangeMax }))
   }
 
   const changeKey = (e) => {
     const key = Object.keys(keySigs)[e.target.value]
     setKey(key)
-    setArrangement(generateNotes({ notes, key, rangeMin, rangeMax }))
   }
 
   useEffect(() => {
@@ -159,6 +167,7 @@ const App = () => {
 
       const range = Math.min(Math.max(0, e.clientX - track_ref.current.offsetLeft), track_ref.current.clientWidth)
       const minRange = Math.min(rangeMax, 1 + Math.round(7 * (range / track_ref.current.clientWidth)))
+
       setRangeMin(minRange)
     }
 
@@ -176,6 +185,7 @@ const App = () => {
 
       const range = Math.min(Math.max(0, e.clientX - track_ref.current.offsetLeft), track_ref.current.clientWidth)
       const maxRange = Math.max(rangeMin, 1 + Math.round(7 * (range / track_ref.current.clientWidth)))
+
       setRangeMax(maxRange)
     }
 
