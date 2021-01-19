@@ -4,9 +4,10 @@ import htm from './lib/htm.js'
 import { Sequence } from './lib/tinymusic.js'
 
 const html = htm.bind(h)
+let pulse
 
 const keySigs = {
-  'none': ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
+  '—':   ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'],
   'C':   ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
   'F':   ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'],
   'B♭':  ['Bb', 'C', 'D', 'Eb', 'F', 'G', 'A'],
@@ -24,18 +25,31 @@ const keySigs = {
 }
 
 const durations = [4, 2, 1, 0.5, 0.25, 0.75]
+const noteTypes = ['Whole', 'Half', 'Quarter', 'Eight', 'Sixteenth']
 const waveTypes = ['square', 'sine', 'sawtooth', 'triangle']
 const params = new URLSearchParams(window.location.search)
 
-const generateNotes = ({ notes, key, rangeMin, rangeMax }) => {
+const generateNotes = ({ notes, key, rangeMin, rangeMax, snap }) => {
   let collection = []
+  let beats = 0
 
-  for (let x = 0; x < notes; x++) {
-    const note = sample(0, keySigs[key].length - 1)
-    const duration = sample(0, durations.length - 1)
-    collection.push(`${keySigs[key][note]}${sample(rangeMin * 1, rangeMax * 1)} ${durations[duration]}`)
+  for (let x = 1; x <= notes; x++) {
+    const note = sample(0, keySigs[key].length)
+    let duration = 0
+
+    if (snap && x == notes) {
+      duration = Math.ceil(beats) - beats
+    } else {
+      duration = durations[sample(0, durations.length - 1)]
+    }
+
+    collection.push(`${keySigs[key][note]}${sample(rangeMin * 1, rangeMax * 1)} ${duration}`)
+    beats += duration
   }
-  return collection
+  return {
+    beats,
+    collection
+  }
 }
 
 const parseArrangement = () => {
@@ -43,8 +57,33 @@ const parseArrangement = () => {
   return params.get('arrangement').split(',')
 }
 
-window.sample = (min, max) => {
+const sample = (min, max) => {
   return Math.floor(Math.random() * (1 + max - min) + min)
+}
+
+let fade = 0
+let direction = 'up'
+
+let pulseIt = (sequence, gain, speed) => {
+  const ceiling = speed * (60 + 1)
+
+  if (direction === 'up') {
+    fade += 1
+    if (fade > ceiling) {
+      direction = 'down'
+      fade -= 1
+    }
+  }
+
+  if (direction === 'down') {
+    fade -= 1
+    if (fade < 1) {
+      direction = 'up'
+      fade += 1
+    }
+  }
+
+  sequence.gain.gain.value = 0.7 - ((fade * gain) / ceiling)
 }
 
 // Cheating to check and see if the page has been parsed
@@ -56,76 +95,39 @@ const App = () => {
   const [playing, setPlaying] = useState(false)
   const [notes, setNotes] = useState(params.get('notes') || 8)
   const [rangeMin, setRangeMin] = useState(params.get('rangemin') || 2)
-  const [rangeMax, setRangeMax] = useState(params.get('rangemax') || 7)
-  const [draggingMin, setDraggingMin] = useState(false)
-  const [draggingMax, setDraggingMax] = useState(false)
-  const [key, setKey] = useState(params.get('key') || 'none')
+  const [rangeMax, setRangeMax] = useState(params.get('rangemax') || 6)
+  const [key, setKey] = useState(params.get('key') || '—')
   const [tempo, setTempo] = useState(params.get('tempo') || 120)
   const [wave, setWave] = useState(params.get('wave') || 'square')
-  const [gain, setGain] = useState(params.get('gain') || 0.5)
   const [smoothing, setSmoothing] = useState(params.get('smoothing') || 0)
   const [staccato, setStaccato] = useState(params.get('staccato') || 0)
   const [bass, setBass] = useState(params.get('bass') || 0)
   const [mid, setMid] = useState(params.get('mid') || 0)
   const [treble, setTreble] = useState(params.get('treble') || 0)
   const [loop, setLoop] = useState(params.get('loop') || true)
+  const [click, setClick] = useState(false)
+  const [clickGain, setClickGain] = useState(1)
+  const [snap, setSnap] = useState(false)
+  const [beats, setBeats] = useState(0)
+  const [split, setSplit] = useState(1)
+  const [pulseGain, setPulseGain] = useState(0)
+  const [pulseSpeed, setPulseSpeed] = useState(0.25)
+  const [keysVisible, setKeysVisible] = useState(false)
   const sequence = useRef()
-  const track_ref = useRef()
-  const track_min_ref = useRef()
-  const track_max_ref = useRef()
+  const clickTrack = useRef()
 
   const arrangement = useMemo(() => {
+    const generated = generateNotes({ notes, key, rangeMin, rangeMax, snap })
+    const collection = generated.collection
+    const beats = generated.beats
+
     if (!parsed) {
       parsed = true
-      return parseArrangement() || generateNotes({ notes, key, rangeMin, rangeMax })
+      return parseArrangement() || { beats, collection }
     } else {
-      return generateNotes({ notes, key, rangeMin, rangeMax })
+      return { beats, collection }
     }
-
-  }, [notes, key, rangeMin, rangeMax])
-
-  const togglePlay = () => {
-    setPlaying(!playing)
-
-    if (!sequence.current) {
-      sequence.current = new Sequence(null, tempo, [])
-    }
-  }
-
-  const resetSettings = () => {
-    setNotes(8)
-    setKey('none')
-    setRangeMin(2)
-    setRangeMax(7)
-    setTempo(120)
-    setWave('square')
-    setGain(0.5)
-    setSmoothing(0)
-    setStaccato(0)
-    setBass(0)
-    setMid(0)
-    setTreble(0)
-  }
-
-  const randomSettings = () => {
-    const notes = sample(1, 24)
-    const key = Object.keys(keySigs)[sample(0, 13)]
-    const rangeMin = sample(1, 8)
-    const rangeMax = sample(rangeMin, 8)
-
-    setNotes(notes)
-    setKey(key)
-    setRangeMin(rangeMin)
-    setRangeMax(rangeMax)
-    setTempo(sample(40, 360))
-    setWave(waveTypes[sample(0, 3)])
-    setGain(sample(25, 100) / 100)
-    setSmoothing(sample(0, 100) / 100)
-    setStaccato(sample(0, 99) / 100)
-    setBass(sample(-100, 100))
-    setMid(sample(-100, 100))
-    setTreble(sample(-100, 100))
-  }
+  }, [notes, key, rangeMin, rangeMax, snap])
 
   const changeNotes = (e) => {
     const notes = e.target.value
@@ -133,88 +135,48 @@ const App = () => {
   }
 
   const changeKey = (e) => {
-    const key = Object.keys(keySigs)[e.target.value]
+    const key = e.target.value
     setKey(key)
+    setKeysVisible(false)
   }
 
-  useEffect(() => {
-    if (!sequence.current) return
+  const getSeconds = () => {
+    return Math.round(beats * (60 / tempo) * 100) / 100
+  }
 
-    if (playing) {
-      sequence.current.play()
-    } else {
-      sequence.current.stop()
+  const togglePlay = () => {
+    setPlaying(!playing)
+
+    if (!sequence.current) {
+      sequence.current = new Sequence(null, tempo, [])
+      sequence.current.gain.gain.value = 0.7
+
+      clickTrack.current = new Sequence(null, tempo / split, ['G7 Q'])
+      clickTrack.current.staccato = 0.95
     }
-  }, [playing])
+  }
 
-  useEffect(() => {
-    const onMouseUp = () => {
-      setDraggingMin(false)
-      setDraggingMax(false)
-    }
+  const randomizeSettings = () => {
+    setNotes(sample(1, 24))
+    setKey(Object.keys(keySigs)[sample(0, Object.keys(keySigs).length - 1)])
+    setRangeMin(sample(1, 8))
+    setRangeMax(sample(rangeMin, 8))
+    setWave(waveTypes[sample(0, waveTypes.length - 1)])
+    setTempo(sample(40, 360))
+    setBass(sample(-25, 25))
+    setMid(sample(-25, 25))
+    setTreble(sample(-25, 25))
+    setSmoothing(Math.round(Math.random() * 100) / 100)
+    setStaccato(Math.round(Math.random() * 100) / 100)
+    setPulseGain(sample(0, 70) / 100)
+  }
 
-    document.body.addEventListener('mouseup', onMouseUp)
-
-    return () => {
-      document.body.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [])
-
-  useEffect(() => {
-    const onMouseMove = (e) => {
-      if (!track_ref.current) return
-      if (!draggingMin) return
-
-      const range = Math.min(Math.max(0, e.clientX - track_ref.current.offsetLeft), track_ref.current.clientWidth)
-      const minRange = Math.min(rangeMax, 1 + Math.round(7 * (range / track_ref.current.clientWidth)))
-
-      setRangeMin(minRange)
-    }
-
-    document.body.addEventListener('mousemove', onMouseMove)
-
-    return () => {
-      document.body.removeEventListener('mousemove', onMouseMove)
-    }
-  }, [draggingMin])
-
-  useEffect(() => {
-    const onMouseMove = (e) => {
-      if (!track_ref.current) return
-      if (!draggingMax) return
-
-      const range = Math.min(Math.max(0, e.clientX - track_ref.current.offsetLeft), track_ref.current.clientWidth)
-      const maxRange = Math.max(rangeMin, 1 + Math.round(7 * (range / track_ref.current.clientWidth)))
-
-      setRangeMax(maxRange)
-    }
-
-    document.body.addEventListener('mousemove', onMouseMove)
-
-    return () => {
-      document.body.removeEventListener('mousemove', onMouseMove)
-    }
-  }, [draggingMax])
-
-  useEffect(() => {
-    if (!track_ref.current) return
-    if (!track_min_ref.current) return
-    if (!track_max_ref.current) return
-
-    let min_width = track_min_ref.current.clientWidth
-    let max_width = track_max_ref.current.clientWidth
-    let width = track_ref.current.clientWidth - min_width
-
-    track_min_ref.current.style.transform = `translateX(${Math.round(width / 7 * (rangeMin - 1))}px)`
-    track_max_ref.current.style.transform = `translateX(${Math.round(width / 7 * (rangeMax - 1))}px)`
-  }, [rangeMin, rangeMax])
-
-  useEffect(() => {
+  const shareSequence = () => {
     params.set('notes', notes)
     params.set('key', key)
     params.set('rangemin', rangeMin)
     params.set('rangemax', rangeMax)
-    params.set('arrangement', arrangement)
+    params.set('arrangement', arrangement.collection)
     params.set('tempo', tempo)
     params.set('wave', wave)
     params.set('smoothing', smoothing)
@@ -225,139 +187,301 @@ const App = () => {
     params.set('loop', loop)
 
     window.history.replaceState({}, '', `${location.pathname}?${params}`);
-  }, [notes, tempo, key, rangeMin, rangeMax, arrangement, wave, smoothing, staccato, bass, mid, treble, loop])
+  }
+
+  useEffect(() => {
+    if (!sequence.current) return
+
+    if (playing) {
+      sequence.current.play()
+      clickTrack.current.play()
+
+      fade = 0
+      direction = 'up'
+      pulse = setInterval(pulseIt, 60 / 1000, sequence.current, pulseGain, Math.abs(pulseSpeed))
+    } else {
+      sequence.current.stop()
+      clickTrack.current.stop()
+      clearInterval(pulse)
+    }
+  }, [playing])
+
+  useEffect(() => {
+    setBeats(arrangement.beats)
+  })
 
   if (sequence.current) {
     sequence.current.notes = []
-    sequence.current.push(...arrangement)
+    sequence.current.push(...arrangement.collection)
     sequence.current.tempo = tempo
     sequence.current.waveType = wave
     sequence.current.smoothing = smoothing
     sequence.current.staccato = staccato
-    sequence.current.gain.gain.value = gain
     sequence.current.bass.gain.value = bass
     sequence.current.mid.gain.value = mid
     sequence.current.treble.gain.value = treble
     sequence.current.loop = loop
+
+    clickTrack.current.tempo = tempo / split
+    const gain = clickTrack.current.gain.gain
+    click ? gain.value = clickGain : gain.value = 0
   }
 
-  const range = (min, max) => {
+  const noteType = (name) => {
     return(html`
-      <div class="track" ref=${track_ref}>
-        <button type="button" class="track-btn" data-min=${rangeMin} ref=${track_min_ref} onMouseDown=${ () => { setDraggingMin(true) }}></button>
-        <button type="button" class="track-btn" data-max=${rangeMax} ref=${track_max_ref} onMouseDown=${ () => { setDraggingMax(true) }}></button>
+      <div class="toggle">
+        <input type="checkbox" id=${name} class="toggle-input" value=${name} />
+        <label for=${name} class="toggle-label h34"><span>${name}</span></label>
       </div>
     `)
   }
 
-  const radio = (name) => {
+  const waveType = (name) => {
     return(html`
-      <div class="radeck">
-        <input type="radio" name="wave" id=${name} value=${name} onInput=${e => setWave(e.target.value)} checked=${wave === name} />
-        <label for=${name} class="button">${name}</label>
+      <div class="toggle">
+        <input type="radio" name="wave" id=${name} class="toggle-input" value=${name} onInput=${e => setWave(e.target.value)} checked=${wave === name} />
+        <label for=${name} class="toggle-label h34"><span>${name}</span></label>
       </div>
     `)
   }
 
   return(html`
-    <fieldset>
-      <legend>Generator</legend>
+    <section id="input">
+      <div class="grid2 mb24">
+        <div class="field">
+          <label for="notes" class="label">Notes</label>
+          <input type="number" id="notes" class="input" min="1" max="24" step="1" value=${notes} onInput=${changeNotes} />
+        </div>
 
-      <div class="field">
-        <label for="notes" class="label">Notes</label>
-        <input type="range" id="notes" class="range" min="1" max="24" step="1" value=${notes} onInput=${changeNotes} />
-        <output for="notes" class="output">${notes}</output>
+        <div class="field">
+          <label for="key" class="label">Key</label>
+          <output id="key" class="input" onClick=${e => setKeysVisible(!keysVisible)}>${key}</output>
+
+          <div id="keys" hidden=${!keysVisible}>
+            ${Object.keys(keySigs).map(keySig => html`
+              <div>
+                <input type="radio" name="keySig" id=${keySig} value=${keySig} onInput=${changeKey} checked=${keySig === key} />
+                <label for=${keySig}>${keySig}</label>
+              </div>
+            `)}
+          </div>
+        </div>
       </div>
 
-      <div class="field">
-        <label for="key" class="label">Key</label>
-        <input type="range" id="key" class="range" min="0" max="13" step="1" value=${Object.keys(keySigs).indexOf(key)} onInput=${changeKey} />
-        <output for="key" class="output">${key}</output>
+      <fieldset class="mb24">
+        <legend class="label legend">Octaves</legend>
+
+        <div class="grid2">
+          <div class="field">
+            <label for="range-min" class="label">Low</label>
+            <input type="number" id="range-min" class="input" min="1" max=${rangeMax} value=${rangeMin >= rangeMax ? rangeMax : rangeMin} onInput=${e => setRangeMin(e.target.value)} />
+          </div>
+
+          <div class="field">
+            <label for="range-max" class="label">High</label>
+            <input type="number" id="range-max" class="input" min=${rangeMin} max="8" value=${rangeMax <= rangeMin ? rangeMin : rangeMax} onInput=${e => setRangeMax(e.target.value)} />
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="toggle mb24">
+        <label for="snap" class="label">Snap to beat</label>
+        <input type="checkbox" id="snap" class="toggle-input" onInput=${e => setSnap(!snap)} checked=${snap} />
+        <label for="snap" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
       </div>
 
-      <div class="field">
-        <label class="label">Range</label>
-        ${range(1, 7)}
-        <output class="output">${rangeMin}, ${rangeMax}</output>
-      </div>
-    </fieldset>
+      <fieldset class="mb24">
+        <legend class="label legend">Note Types</legend>
 
-    <fieldset>
-      <legend>Wave Type</legend>
-      <div class="radios">
-        ${waveTypes.map(radio)}
-      </div>
-    </fieldset>
+        <div class="grid3">
+          ${noteTypes.map(noteType)}
+        </div>
+      </fieldset>
 
-    <fieldset>
-      <legend>Effects</legend>
-
-      <div class="field">
-        <label for="tempo" class="label">Tempo</label>
-        <input type="range" id="tempo" class="range" min="40" max="360" step="1" value=${tempo} onInput=${e => setTempo(e.target.value)} />
-        <output for="tempo" class="output">${tempo}</output>
-      </div>
-
-      <div class="field">
-        <label for="smoothing" class="label">Sweep</label>
-        <input type="range" id="smoothing" class="range" min="0" max="1" step="0.01" value=${smoothing} onInput=${e => setSmoothing(e.target.value)} />
-        <output for="smoothing" class="output">${smoothing}</output>
-      </div>
-
-      <div class="field">
-        <label for="staccato" class="label">Decay</label>
-        <input type="range" id="staccato" class="range" min="0" max="1" step="0.01" value=${staccato} onInput=${e => setStaccato(e.target.value)} />
-        <output for="staccato" class="output">${staccato}</output>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>Equalizer</legend>
-
-      <div class="field">
-        <label for="bass" class="label">Lows</label>
-        <input type="range" id="bass" class="range" min="-100" max="100" value=${bass} onInput=${e => setBass(e.target.value)} />
-        <output for="bass" class="output">${bass}</output>
-      </div>
-
-      <div class="field">
-        <label for="mid" class="label">Mids</label>
-        <input type="range" id="mid" class="range" min="-100" max="100" value=${mid} onInput=${e => setMid(e.target.value)} />
-        <output for="mid" class="output">${mid}</output>
-      </div>
-
-      <div class="field">
-        <label for="treble" class="label">Highs</label>
-        <input type="range" id="treble" class="range" min="-100" max="100" value=${treble} onInput=${e => setTreble(e.target.value)} />
-        <output for="treble" class="output">${treble}</output>
-      </div>
-
-      <div class="field">
-        <label for="gain" class="label">Gain</label>
-        <input type="range" id="gain" class="range" min="0" max="1" step="0.01" value=${gain} onInput=${e => setGain(e.target.value)} />
-        <output for="gain" class="output">${gain}</output>
-      </div>
-    </fieldset>
-
-    <fieldset id="playback">
-      <div class="radeck radeck-green">
-        <input type="checkbox" id="playing" onInput=${togglePlay} checked=${playing} />
-        <label for="playing">${playing ? 'Stop' : 'Play'}</label>
-      </div>
-
-      <div class="radeck">
-        <input type="checkbox" id="loop" onInput=${e => setLoop(!loop)} checked=${loop} />
-        <label for="loop">Loop</label>
-      </div>
-
-      <button type="button" class="btn" onClick=${resetSettings}>
-        Reset
+      <button type="button" class="btn btn-generate" onClick=${randomizeSettings}>
+        Randomize Settings
       </button>
+    </section>
 
-      <button type="button" class="btn" onClick=${randomSettings}>
-        Random!
-      </button>
-    </fieldset>
+    <section id="output">
+      <fieldset id="playback">
+        <div>
+          <h1>RMG-2021</h1>
+          <h2>TinyMusic Sequencer</h2>
+        </div>
+
+        <div>
+          <div class="toggle mb24">
+            <label for="playing" class="label">Play</label>
+            <input type="checkbox" id="playing" class="toggle-input" onInput=${togglePlay} checked=${playing} />
+            <label for="playing" class="toggle-label toggle-play" aria-hidden="true">
+              ${playing ? html`
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                </svg>
+              `: html`
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              `}
+            </label>
+          </div>
+
+          <div class="grid2">
+            <div class="toggle">
+              <label for="loop" class="label">Loop</label>
+              <input type="checkbox" id="loop" class="toggle-input" onInput=${e => setLoop(!loop)} checked=${loop} />
+              <label for="loop" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
+            </div>
+
+            <div class="toggle">
+              <label for="click" class="label">Click</label>
+              <input type="checkbox" id="click" class="toggle-input" onInput=${e => setClick(!click)} checked=${click} />
+              <label for="click" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <div id="display">
+        <div id="meta">
+          <div>
+            <div class="field ib mr24">
+              <div class="label">Beats</div>
+              <output for="beats" class="output">${beats}</output>
+            </div>
+
+            <div class="field ib mr24">
+              <div class="label">Tempo</div>
+              <output for="tempo" class="output">${tempo}</output>
+            </div>
+
+            <div class="field ib mr24">
+              <div class="label">Split</div>
+              <output for="split" class="output">${split}</output>
+            </div>
+
+            <div class="field ib mr24">
+              <div class="label">Seconds</div>
+              <output for="seconds" class="output">${getSeconds()}</output>
+            </div>
+          </div>
+
+          <button type="button" class="btn-share" onClick=${shareSequence}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="viz"></div>
+      </div>
+
+      <fieldset>
+        <legend class="label legend">Wave Type</legend>
+        <div class="grid2">
+          ${waveTypes.map(waveType)}
+        </div>
+      </fieldset>
+
+      <div id="sliders">
+        <fieldset>
+          <legend class="label legend">Meter</legend>
+
+          <div class="grid3">
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="click-gain" class="slider" min="0" max="1" step="0.01" value=${clickGain} onInput=${e => setClickGain(e.target.value)} />
+              </div>
+              <label for="click-gain" class="label">Gain</label>
+            </div>
+
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="tempo" class="slider" min="40" max="360" step="1" value=${tempo} onInput=${e => setTempo(e.target.value)} />
+              </div>
+              <label for="tempo" class="label">Tempo</label>
+            </div>
+
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="split" class="slider" min="0.25" max=${beats} step="0.25" value=${split} onInput=${e => setSplit(e.target.value)} />
+              </div>
+              <label for="split" class="label">Split</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="label legend">EQ</legend>
+
+          <div class="grid3">
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="bass" class="slider" min="-100" max="100" value=${bass} onInput=${e => setBass(e.target.value)} />
+              </div>
+              <label for="bass" class="label">Lows</label>
+            </div>
+
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="mid" class="slider" min="-100" max="100" value=${mid} onInput=${e => setMid(e.target.value)} />
+              </div>
+              <label for="mid" class="label">Mids</label>
+            </div>
+
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="treble" class="slider" min="-100" max="100" value=${treble} onInput=${e => setTreble(e.target.value)} />
+              </div>
+              <label for="treble" class="label">Highs</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="label legend">Note</legend>
+
+          <div class="grid2">
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="smoothing" class="slider" min="0" max="1" step="0.01" value=${smoothing} onInput=${e => setSmoothing(e.target.value)} />
+              </div>
+              <label for="smoothing" class="label">Sweep</label>
+            </div>
+
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="staccato" class="slider" min="0" max="0.99" step="0.01" value=${staccato} onInput=${e => setStaccato(e.target.value)} />
+              </div>
+              <label for="staccato" class="label">Decay</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="label legend">Pulse</legend>
+
+          <div class="grid2">
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="pulse-gain" class="slider" min="0" max="0.7" step="0.01" value=${pulseGain} onInput=${e => setPulseGain(e.target.value)} />
+              </div>
+              <label for="pulse-gain" class="label">Gain</label>
+            </div>
+
+            <div class="field">
+              <div class="slider-wrapper mb8">
+                <input type="range" id="pulse-speed" class="slider" min=${-beats} max="0.25" step="0.25" value=${pulseSpeed} onInput=${e => setPulseSpeed(e.target.value)} />
+              </div>
+              <label for="pulse-speed" class="label">Speed</label>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+    </section>
   `)
 }
 
