@@ -28,6 +28,7 @@ const durations = [4, 2, 1, 0.5, 0.25, 0.75]
 const noteTypes = ['Whole', 'Half', 'Quarter', 'Eight', 'Sixteenth']
 const waveTypes = ['square', 'sine', 'sawtooth', 'triangle']
 const params = new URLSearchParams(window.location.search)
+const maxVolume = 0.5
 
 const generateNotes = ({ notes, key, rangeMin, rangeMax, snap }) => {
   let collection = []
@@ -59,31 +60,6 @@ const parseArrangement = () => {
 
 const sample = (min, max) => {
   return Math.floor(Math.random() * (1 + max - min) + min)
-}
-
-let fade = 0
-let direction = 'up'
-
-let pulseIt = (sequence, gain, speed) => {
-  const ceiling = speed * (60 + 1)
-
-  if (direction === 'up') {
-    fade += 1
-    if (fade > ceiling) {
-      direction = 'down'
-      fade -= 1
-    }
-  }
-
-  if (direction === 'down') {
-    fade -= 1
-    if (fade < 1) {
-      direction = 'up'
-      fade += 1
-    }
-  }
-
-  sequence.gain.gain.value = 0.7 - ((fade * gain) / ceiling)
 }
 
 // Cheating to check and see if the page has been parsed
@@ -149,7 +125,7 @@ const App = () => {
 
     if (!sequence.current) {
       sequence.current = new Sequence(null, tempo, [])
-      sequence.current.gain.gain.value = 0.7
+      sequence.current.gain.gain.value = maxVolume
 
       clickTrack.current = new Sequence(null, tempo / split, ['G7 Q'])
       clickTrack.current.staccato = 0.95
@@ -169,6 +145,7 @@ const App = () => {
     setSmoothing(Math.round(Math.random() * 100) / 100)
     setStaccato(Math.round(Math.random() * 100) / 100)
     setPulseGain(sample(0, 70) / 100)
+    setPulseSpeed(sample(-beats, 0))
   }
 
   const shareSequence = () => {
@@ -189,22 +166,55 @@ const App = () => {
     window.history.replaceState({}, '', `${location.pathname}?${params}`);
   }
 
+  let fade
+  let direction
+
+  const pulseIt = () => {
+    const ceiling = Math.abs(pulseSpeed) * (30 + 1)
+
+    if (direction === 'up') {
+      fade += 1
+      if (fade > ceiling) {
+        direction = 'down'
+        fade -= 1
+      }
+    }
+
+    if (direction === 'down') {
+      fade -= 1
+      if (fade < 1) {
+        direction = 'up'
+        fade += 1
+      }
+    }
+
+    sequence.current.gain.gain.value = maxVolume - ((fade * pulseGain) / ceiling)
+  }
+
   useEffect(() => {
     if (!sequence.current) return
 
     if (playing) {
       sequence.current.play()
       clickTrack.current.play()
-
-      fade = 0
-      direction = 'up'
-      pulse = setInterval(pulseIt, 60 / 1000, sequence.current, pulseGain, Math.abs(pulseSpeed))
     } else {
       sequence.current.stop()
       clickTrack.current.stop()
       clearInterval(pulse)
     }
   }, [playing])
+
+  useEffect(() => {
+    if (!sequence.current) return
+
+    clearInterval(pulse)
+
+    if (playing) {
+      fade = 0
+      direction = 'up'
+      pulse = setInterval(pulseIt, 1000 / 60)
+    }
+  }, [playing, pulseGain, pulseSpeed])
 
   useEffect(() => {
     setBeats(arrangement.beats)
@@ -231,7 +241,7 @@ const App = () => {
     return(html`
       <div class="toggle">
         <input type="checkbox" id=${name} class="toggle-input" value=${name} />
-        <label for=${name} class="toggle-label h34"><span>${name}</span></label>
+        <label for=${name} class="toggle-label"><span>${name}</span></label>
       </div>
     `)
   }
@@ -240,7 +250,7 @@ const App = () => {
     return(html`
       <div class="toggle">
         <input type="radio" name="wave" id=${name} class="toggle-input" value=${name} onInput=${e => setWave(e.target.value)} checked=${wave === name} />
-        <label for=${name} class="toggle-label h34"><span>${name}</span></label>
+        <label for=${name} class="toggle-label"><span>${name}</span></label>
       </div>
     `)
   }
@@ -298,8 +308,12 @@ const App = () => {
         </div>
       </fieldset>
 
+      <button type="button" class="btn btn-generate mb8">
+        New Sequence / Same Settings
+      </button>
+
       <button type="button" class="btn btn-generate" onClick=${randomizeSettings}>
-        Randomize Settings
+        New Sequence / Randomize Settings
       </button>
     </section>
 
@@ -467,7 +481,7 @@ const App = () => {
           <div class="grid2">
             <div class="field">
               <div class="slider-wrapper mb8">
-                <input type="range" id="pulse-gain" class="slider" min="0" max="0.7" step="0.01" value=${pulseGain} onInput=${e => setPulseGain(e.target.value)} />
+                <input type="range" id="pulse-gain" class="slider" min="0" max=${maxVolume} step="0.01" value=${pulseGain} onInput=${e => setPulseGain(e.target.value)} />
               </div>
               <label for="pulse-gain" class="label">Gain</label>
             </div>
