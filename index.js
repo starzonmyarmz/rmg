@@ -34,7 +34,7 @@ const generateNotes = ({ notes, key, rangeMin, rangeMax, snap }) => {
   let beats = 0
 
   for (let x = 1; x <= notes; x++) {
-    const note = sample(0, keySigs[key].length)
+    const note = sample(0, keySigs[key].length - 1)
     let duration = 0
 
     if (snap && x == notes) {
