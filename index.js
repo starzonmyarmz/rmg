@@ -25,7 +25,6 @@ const keySigs = {
 }
 
 const durations = [4, 2, 1, 0.5, 0.25, 0.75]
-const noteTypes = ['Whole', 'Half', 'Quarter', 'Eight', 'Sixteenth']
 const waveTypes = ['square', 'sine', 'sawtooth', 'triangle']
 const params = new URLSearchParams(window.location.search)
 const maxVolume = 0.5
@@ -257,7 +256,12 @@ const App = () => {
 
   return(html`
     <section id="input">
-      <div class="grid2 mb24">
+      <div>
+        <h1>RMG-2021</h1>
+        <h2>TinyMusic Sequencer</h2>
+      </div>
+
+      <div class="grid2">
         <div class="field">
           <label for="notes" class="label">Notes</label>
           <input type="number" id="notes" class="input" min="1" max="24" step="1" value=${notes} onInput=${changeNotes} />
@@ -278,7 +282,7 @@ const App = () => {
         </div>
       </div>
 
-      <fieldset class="mb24">
+      <fieldset>
         <legend class="label legend">Octaves</legend>
 
         <div class="grid2">
@@ -294,19 +298,11 @@ const App = () => {
         </div>
       </fieldset>
 
-      <div class="toggle mb24">
+      <div class="toggle">
         <label for="snap" class="label">Snap to beat</label>
         <input type="checkbox" id="snap" class="toggle-input" onInput=${e => setSnap(!snap)} checked=${snap} />
         <label for="snap" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
       </div>
-
-      <fieldset class="mb24">
-        <legend class="label legend">Note Types</legend>
-
-        <div class="grid3">
-          ${noteTypes.map(noteType)}
-        </div>
-      </fieldset>
 
       <button type="button" class="btn btn-generate" onClick=${randomizeSettings}>
         Randomize Settings
@@ -315,40 +311,33 @@ const App = () => {
 
     <section id="output">
       <fieldset id="playback">
-        <div>
-          <h1>RMG-2021</h1>
-          <h2>TinyMusic Sequencer</h2>
+        <div class="toggle mb24">
+          <label for="playing" class="label">Play</label>
+          <input type="checkbox" id="playing" class="toggle-input" onInput=${togglePlay} checked=${playing} />
+          <label for="playing" class="toggle-label toggle-play" aria-hidden="true">
+            ${playing ? html`
+              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              </svg>
+            `: html`
+              <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+            `}
+          </label>
         </div>
 
-        <div>
-          <div class="toggle mb24">
-            <label for="playing" class="label">Play</label>
-            <input type="checkbox" id="playing" class="toggle-input" onInput=${togglePlay} checked=${playing} />
-            <label for="playing" class="toggle-label toggle-play" aria-hidden="true">
-              ${playing ? html`
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                </svg>
-              `: html`
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              `}
-            </label>
+        <div class="grid2">
+          <div class="toggle">
+            <label for="loop" class="label">Loop</label>
+            <input type="checkbox" id="loop" class="toggle-input" onInput=${e => setLoop(!loop)} checked=${loop} />
+            <label for="loop" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
           </div>
 
-          <div class="grid2">
-            <div class="toggle">
-              <label for="loop" class="label">Loop</label>
-              <input type="checkbox" id="loop" class="toggle-input" onInput=${e => setLoop(!loop)} checked=${loop} />
-              <label for="loop" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
-            </div>
-
-            <div class="toggle">
-              <label for="click" class="label">Click</label>
-              <input type="checkbox" id="click" class="toggle-input" onInput=${e => setClick(!click)} checked=${click} />
-              <label for="click" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
-            </div>
+          <div class="toggle">
+            <label for="click" class="label">Click</label>
+            <input type="checkbox" id="click" class="toggle-input" onInput=${e => setClick(!click)} checked=${click} />
+            <label for="click" class="toggle-label toggle-label-sm" aria-hidden="true"></label>
           </div>
         </div>
       </fieldset>
