@@ -308,12 +308,8 @@ const App = () => {
         </div>
       </fieldset>
 
-      <button type="button" class="btn btn-generate mb8">
-        New Sequence / Same Settings
-      </button>
-
       <button type="button" class="btn btn-generate" onClick=${randomizeSettings}>
-        New Sequence / Randomize Settings
+        Randomize Settings
       </button>
     </section>
 
