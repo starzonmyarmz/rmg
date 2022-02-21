@@ -375,7 +375,7 @@ const App = () => {
           </button>
         </div>
 
-        <div id="viz"></div>
+        <div id="viz">${arrangement.collection}</div>
       </div>
 
       <fieldset>
