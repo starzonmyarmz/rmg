@@ -467,3 +467,15 @@ h2 {
 .mr24 { margin-right: 24px; }
 
 .ib { display: inline-block; }
+
+
+
+footer {
+  font-size: 13px;
+  margin-top: 24px;
+  text-align: center;
+}
+
+footer a {
+  color: inherit;
+}
