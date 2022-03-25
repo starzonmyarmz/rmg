@@ -257,10 +257,10 @@ const App = () => {
 
   return(html`
     <section id="input">
-      <div>
+      <header>
         <h1>RMG-2021</h1>
         <h2>TinyMusic Sequencer</h2>
-      </div>
+      </header>
 
       <div class="grid2">
         <div class="field">
@@ -387,10 +387,10 @@ const App = () => {
       </fieldset>
 
       <div id="sliders">
-        <fieldset>
+        <fieldset id="sliders-meter">
           <legend class="label legend">Meter</legend>
 
-          <div class="grid3">
+          <div>
             <div class="field">
               <div class="slider-wrapper mb8">
                 <input type="range" id="click-gain" class="slider" min="0" max="1" step="0.01" value=${clickGain} onInput=${e => setClickGain(e.target.value)} />
@@ -414,10 +414,10 @@ const App = () => {
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset id="sliders-eq">
           <legend class="label legend">EQ</legend>
 
-          <div class="grid3">
+          <div>
             <div class="field">
               <div class="slider-wrapper mb8">
                 <input type="range" id="bass" class="slider" min="-100" max="100" value=${bass} onInput=${e => setBass(e.target.value)} />
@@ -441,10 +441,10 @@ const App = () => {
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset id="sliders-note">
           <legend class="label legend">Note</legend>
 
-          <div class="grid2">
+          <div>
             <div class="field">
               <div class="slider-wrapper mb8">
                 <input type="range" id="smoothing" class="slider" min="0" max="1" step="0.01" value=${smoothing} onInput=${e => setSmoothing(e.target.value)} />
@@ -461,10 +461,10 @@ const App = () => {
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset id="sliders-pulse">
           <legend class="label legend">Pulse</legend>
 
-          <div class="grid2">
+          <div>
             <div class="field">
               <div class="slider-wrapper mb8">
                 <input type="range" id="pulse-gain" class="slider" min="0" max=${maxVolume} step="0.01" value=${pulseGain} onInput=${e => setPulseGain(e.target.value)} />
